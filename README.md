@@ -1,7 +1,7 @@
-# GPU-MRF Prototype
+# GPU-Data-To-Image Prototype
 
-This prototype allows you to quickly generate MRF files from raw data and generate imagery from raw data on-demand 
-using GPUs. 
+This prototype allows you to quickly generate image tiles and MRF files from raw data and on-demand using GPUs, using
+different colormaps and formats.
 
 ## core.py
 
