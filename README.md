@@ -27,6 +27,10 @@ parser.py loads data from the NEXUS JSON backend and formats it into a Numpy arr
 some tweaking. Hopefully when this is incorporated directly into the backend we will receive Numpy arrays directly instead
 of JSON files. 
 
+## Setup
+
+This code requires a number of Python libraries to run. You can run `pip install -r requirements.txt` to automatically install requirements. Then you can run the individual modules with `python [name]` or the run.sh script for the Flask server.
+
 ## Algorithm Overview
 
 This code uses PyTorch for GPU acceleration, a near Numpy-clone with built-in GPU support for PyTorch Tensors, equivalents
