@@ -14,7 +14,8 @@ them in a pickle format or use the data directly. See parser.py for this utility
 
 server.py is a simple flask server supporting a subset of the WMTS protocol. If run directly, it can be used to query 
 tiles in a WMTS format. This is very primitive, and the WMTS support extends only to the TileMatrix, TileCol, and TileRow
-fields in the WMTS string, as well as any keywords you define in server.py.
+fields in the WMTS string, as well as any keywords you define in server.py. To start the server, use `./run.sh`, which will
+run a local server at localhost:5000 by default.
 
 ## mrfgen.py
 
@@ -26,7 +27,7 @@ parser.py loads data from the NEXUS JSON backend and formats it into a Numpy arr
 some tweaking. Hopefully when this is incorporated directly into the backend we will receive Numpy arrays directly instead
 of JSON files. 
 
-# Algorithm Overview
+## Algorithm Overview
 
 This code uses PyTorch for GPU acceleration, a near Numpy-clone with built-in GPU support for PyTorch Tensors, equivalents
 of Numpy arrays. You can simply call my_tensor.to("cuda:0") or my_tensor.to("cpu") to make all code run on the GPU or 
@@ -47,3 +48,13 @@ and encode the result as a PNG or JPEG (faster) and serve it back to the user wi
 The current implementation assumes that colormaps are evenly spaced, so just dividing by the bin spacing works 
 for binning. This isn't always true, but you can probably use a dictionary or numpy digitize function for more 
 exotic colormaps. 
+
+The algorithm only loads the data needed for each tile, which is the entire dataset for the level 0 TileMatrix, but drops by a
+factor of 4 for each lower-level overview. 
+
+## MRF Generation
+
+MRF generation uses the same basic algorithm, but loads the entire dataset and segments it into all possible tiles which are
+saved in the MRF format. This can use various image formats within the MRF and different downsampling methods. This could be
+significantly improved by parallelizing the process of encoding the image files, since the main overhead is not computation
+but the expense of creating PNG or JPEG strings from the Numpy arrays. 
