@@ -3,6 +3,10 @@
 This prototype allows you to quickly generate image tiles and MRF files from raw data and on-demand using GPUs, using
 different colormaps and formats.
 
+## Setup
+
+The easiest way to use this software is to download a data file like `20160628-JPL-L4UHfnd-GLOB-v01-fv04-MUR.nc` and drag it to the data folder in this repository. You can run `pip install -r requirements.txt` to automatically install Python dependencies. Note that you must have a computer with an NVIDIA GPU and CUDA must be installed (follow the instructions at https://developer.nvidia.com/cuda-downloads. Then you can run a simple tile generation server with `python server.py`, or launch the WMTS-like flask server with `./run.sh`. You can also use the `parser.py` file to pull date from the public NEXUS/SDAP backend.
+
 ## core.py
 
 core.py contains the core algorithms for generating mrf files and producing tiles from data. This has been tested mostly
@@ -26,10 +30,6 @@ mrfgen.py generates an MRF with desired configurations from the raw data. See co
 parser.py loads data from the NEXUS JSON backend and formats it into a Numpy array. This is largely unfinished and will need
 some tweaking. Hopefully when this is incorporated directly into the backend we will receive Numpy arrays directly instead
 of JSON files. 
-
-## Setup
-
-This code requires a number of Python libraries to run. You can run `pip install -r requirements.txt` to automatically install requirements. Then you can run the individual modules with `python [name]` or the run.sh script for the Flask server.
 
 ## Algorithm Overview
 
