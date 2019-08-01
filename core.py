@@ -36,7 +36,7 @@ def getcmap(layer, local=False):
     cmap = xmltodict.parse(data)
     cmap_body = cmap['ColorMap']['ColorMapEntry']
 
-    cmap = np.zeros((214,3), dtype=np.uint8)
+    cmap = np.zeros((len(cmap_body) - 2,3), dtype=np.uint8)
 
     for i, entry in enumerate(cmap_body[1:-1]):
         color = tuple([int(x) for x in entry['@rgb'].split(",")])
@@ -45,6 +45,34 @@ def getcmap(layer, local=False):
 
     return cmap
 
+class CMapCache:
+    def __init__(self, max_maps = None):
+        if max_maps and max_maps <= 0:
+            raise ValueError("max_maps parameter should be greater than zero.")
+
+        self.max_maps = max_maps
+        self.maps = {}
+        self.num = 0
+
+    def clear_cache(self):
+        self.maps = {}
+        self.num = 0
+
+    def cache(self, name, map):
+        if self.max_maps and self.num >= self.max_maps:
+            self.clear_cache()
+        
+        self.maps[name] = map
+        self.num += 1
+        
+    def contains(self, name):
+        return name in self.maps
+
+    def lookup(self, name):
+        if name in self.maps:
+            return self.maps[name]
+        else:
+            return None
 
 def getdata(name): # temporarily, load pickled data. Can also load from NetCDF (same cost).
     with open(os.path.join("data", name + ".pickle"), "rb") as f:
@@ -95,13 +123,18 @@ class Product:
         self.offset = offset
         self.scale = scale
 
-        self.cmap = torch.Tensor(getcmap(self.name))
+        self.cmapcache = CMapCache()
+
+        self.cmap = torch.Tensor(getcmap(self.name)) # "VIIRS_SNPP_Brightness_Temp_BandI5_Day"
 
         if device == "cuda":
             self.cmap = self.cmap.cuda().to(torch.uint8) # TODO fix this
         else:
             self.cmap = self.cmap.to(torch.uint8) # TODO fix this
 
+        self.cmapcache.cache(self.name, self.cmap)
+        self.random = None
+        
         if data is None:
             self.data = torch.Tensor(getdata(self.name))
         else:
@@ -159,6 +192,7 @@ class Product:
 
         print("Running MRF generation on file {} with device {}, method {} and format {}".format(self.name, device, method, format))
         data = self.data.to(device, copy=True).float()
+
         data = data.mul_(self.scale).add_(self.offset)
         data = data.clamp_(min=min_value, max=max_value)
                     
@@ -229,7 +263,24 @@ class Product:
         
         with open(os.path.join(output_dir, self.name + ".mrf"), "w") as f:
             f.write(mrf)
-        
+    
+    def getstats(self, minx, miny, maxx, maxy):
+        device = "cuda:0"
+
+        dims = np.array([minx, miny, maxx, maxy])
+
+        dims = dims + np.array([180, -66.5, 180, -66.5])
+        dims = np.round(np.array([self.data.shape[1], self.data.shape[0], self.data.shape[1], self.data.shape[0]]) * dims / np.array([180, 18.5, 180, 18.5]))
+
+        miny, maxy = sorted([dims[1], dims[3]])
+        minx, maxx = dims[0], dims[2]
+
+        print(int(miny), int(maxy), int(minx), int(maxx))
+        data = self.data[int(miny) : int(maxy), int(minx) : int(maxx)].to(device, copy=True)
+        data = data.mul_(self.scale).add_(self.offset)
+
+        return {"mean" : float(data.mean().cpu()), "min" : float(data.min().cpu()), "max" : float(data.max().cpu()), "std" : float(data.std().cpu())}
+
     def gettile(self, tilecolumn, tilerow, tilematrix, config=None):
         """config:
             device (str) -- cuda or cpu
@@ -237,6 +288,8 @@ class Product:
             max_value (float) -- maximum value to set (C)
             use_cache (bool) -- should use cache regardless of configuration
             scale (bool) -- should scale data using min_value and max_value
+            cmap (str) -- name of cmap to use if not default
+            filter (str) -- name of filter to use (can be None)
         """
         
         if config is None:
@@ -246,6 +299,8 @@ class Product:
             use_cache = True
             method = "nn"
             scale = False
+            cmap_name = None
+            filter = None
         else:
             if config.get("device", "cpu") == "cuda" and not torch.cuda.is_available():
                 raise ValueError("Configuration backend was cuda but cuda is not available")
@@ -256,10 +311,28 @@ class Product:
             use_cache = True if config.get("use_cache", "True") == "True" else False
             method = config.get("method", "nn")
             scale = True if config.get("scale", "False") == "True" else False
+            cmap_name = config.get("cmap", None)
+            filter = config.get("filter", None)
 
         if use_cache and self.cache.contains(tilecolumn, tilerow, tilematrix):
             return self.cache.get(tilecolumn, tilerow, tilematrix)
         
+        if cmap_name is not None:
+            if cmap_name == "random":
+                if self.random is not None:
+                    cmap = self.random
+                else:
+                    cmap = torch.randint(0, 256, (256, 3)).to(device)
+                    cmap[0] = self.cmap[0]
+                    self.random = cmap
+            elif self.cmapcache.contains(cmap_name):
+                cmap = self.cmapcache.lookup(cmap_name).to(device)
+            else:
+                cmap = torch.Tensor(getcmap(cmap_name)).to(device).to(torch.uint8) # "VIIRS_SNPP_Brightness_Temp_BandI5_Day"
+                self.cmapcache.cache(cmap_name, cmap)
+        else:
+            cmap = self.cmap
+
         if tilematrix >= self.num_overviews:
             print("Tilematrix is greater than number of overviews.")
             return None
@@ -276,46 +349,73 @@ class Product:
 
         # src = (src / 0.15).clamp_(min=0, max=len(self.cmap) - 1)
         src = src.clamp_(min=min_value, max=max_value)
+        
+        if filter is not None:
+            if filter == 'sobel':
+                src = self.downsample(src, scale = 2 ** (self.num_overviews - tilematrix - 1), method=method)
+                
+                filter = torch.tensor([[1., 2., 1.], [0., 0., 0.], [-1., -2., -1.]]).to(device)
+                f = filter.expand(1, 1, 3, 3)
+
+                low = torch.abs(torch.nn.functional.conv2d(src.unsqueeze(0).unsqueeze(1).float(), f, stride=1, padding=1)).squeeze()
+                print(low.min(), low.max())
+                # low = src.clamp_(0, 0.1).squeeze()
+
+                print(low.shape)
+
+                return self.render(low, device=device, use_cache=use_cache, tilerow=tilerow, tilecol=tilecolumn, tilematrix=tilematrix)
+            else:
+                raise ValueError("Provided filter not supported")
+        
         if not scale:
-            src = src.div_(0.15).clamp_(min=0, max=len(self.cmap) - 1)
+            src = src.div_(0.15).clamp_(min=0, max=len(cmap) - 1)
 
         if method == "nn":
             if scale:
-                if src.min() != src.max():
-                    src = src.sub_(src.min()).div_(src.max()).mul_(len(self.cmap) - 1)
-                else:
-                    src = src.sub_(src.min())
-            
-            src = src.long()
-            image = self.cmap[src]
-            low = image[:: 2 ** (self.num_overviews - tilematrix - 1), :: 2 ** (self.num_overviews - tilematrix - 1)]
+                src = self.clip(src, len(cmap) - 1)
+
+            low = self.downsample(src.long(), scale=2 ** (self.num_overviews - tilematrix - 1), method='nn')
+
         elif method == "avg":
-            src = torch.nn.functional.avg_pool2d(src.unsqueeze(0), 2 ** (self.num_overviews - tilematrix - 1)).squeeze()
+            src = self.downsample(src, 2 ** (self.num_overviews - tilematrix - 1), method='avg')
             if scale:
-                if src.min() != src.max():
-                    src = src.sub_(src.min()).div_(src.max()).mul_(len(self.cmap) - 1)
-                else:
-                    src = src.sub_(src.min())
-                    
-            src = src.long()
-            low = self.cmap[src]
+                src = self.clip(src, len(cmap) - 1)
+            low = src.long()
+
         else:
             raise ValueError("given downsampling method {} is not supported".format(method))
 
-        print(low.shape, src.shape)
+        low = cmap[low]
 
+        return self.render(low, device=device, use_cache=use_cache, tilerow=tilerow, tilecol=tilecolumn, tilematrix=tilematrix)
 
-        # s2 = time.time()
-        empty = torch.zeros((512, 512, 3), device=device, dtype=torch.uint8)
+    def downsample(self, image, scale, method='nn'):
+        image = image.squeeze()
+        if method == 'nn':
+            return image[:: scale, :: scale]
+        elif method == 'avg':
+            return torch.nn.functional.avg_pool2d(image.unsqueeze(0), scale).squeeze()
+        else:
+            raise ValueError("Invalid downsampling method used")
 
-        # empty = torch.ByteTensor(512, 512, 3).fill_(0)
-        empty[0:low.shape[0], 0:low.shape[1]] = low
-        final = empty.cpu().numpy()
-        # e2 = time.time()
+    def clip(self, image, max):
+        if image.min() != image.max():
+            image = image.sub_(image.min()).div_(image.max()).mul_(max)
+        else:
+            image = image.sub_(image.min())
 
-        # print("copy back took {} seconds".format(e2 - s2))
+        return image
+
+    def render(self, image, device="cuda", use_cache=True, tilerow=0, tilecol=0, tilematrix=0):
+        if len(image.shape) == 3:
+            empty = torch.zeros((512, 512, 3), device=device, dtype=torch.uint8)
+        else:
+            empty = torch.zeros((512, 512), device=device, dtype=torch.uint8)
+
+        empty[0:image.shape[0], 0:image.shape[1]] = image
+        final = empty.squeeze().cpu().numpy()
 
         if use_cache:
-            self.cache.store(tilecolumn, tilerow, tilematrix, final)
+            self.cache.store(tilecol, tilerow, tilematrix, final)
 
         return final

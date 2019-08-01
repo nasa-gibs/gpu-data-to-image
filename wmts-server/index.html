@@ -5,10 +5,30 @@
     <link rel="stylesheet" href="https://openlayers.org/en/v5.3.0/css/ol.css" type="text/css">
     <!-- The line below is only needed for old environments like Internet Explorer and Android 4.x -->
     <script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=requestAnimationFrame,Element.prototype.classList,URL"></script>
+    <script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+          $('.ol-overlaycontainer-stopevent').remove();
+          fetch('http://localhost:5000/clearcache').then(function(response) {return console.log(response); });
+        });
+
+    </script>
 
   </head>
   <body>
-    <div id="map" class="map"></div>
-    <script src="index.js"></script>
-  </body>
+    <div id="logo" style="background-color: black; position: fixed; top: 1%; left: 1%; z-index: 1; border-radius: 10px; opacity: 0.75;">
+        <img src="images/nasa.png" width="100px">
+        <img src="images/logo.png" width="150px" style="padding-top:10px">
+    </div>
+
+    <div id="map" class="map" style="height:50%"></div>
+    
+  <input type="checkbox" name="scale" id='scale'> Scale <br>
+  <input type="checkbox" name="cpu" id='cpu'> CPU <br>
+  <input type="checkbox" name="filter" id='filter'> Filter <br>
+  <input type="checkbox" name="cmap" id='cmap'> Alt Colormap <br>
+  <input type="checkbox" name="random" id='random'> Random Colormap <br>
+  <p>Stats: <span id="stats"></span></p>
+</body>
+<script src="index.js"></script>  
 </html>

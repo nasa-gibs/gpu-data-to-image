@@ -23,7 +23,7 @@ def get_data(name="AVHRR_OI_L4_GHRSST_NCEI", bbox=(-20, -20, 10, 10), date="2014
     data = np.stack(list(zip(*data)), axis=1)
 
     xvals = np.round((data[:,0] - data[:,0].min()) / 0.25).astype(np.int64)
-    yvals = np.round((data[:,1] - data[:,1].min()) / 0.25).astype(np.int64)
+    yvals = np.round((data[:,1] - data[:,1].min()) / 0.25).astype(np.int64) ## 0.25 assumes difference between points is 0.25 degrees. Should be changed!
     values = data[:,2]
 
     print(values.shape)

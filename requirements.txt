@@ -1,8 +1,0 @@
-torch
-scipy
-requests
-numpy
-pickle
-xmltodict
-flask
-imageio

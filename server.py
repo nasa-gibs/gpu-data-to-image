@@ -1,4 +1,4 @@
-from flask import Flask, render_template, flash, redirect, session, url_for, request, g, Markup, jsonify
+from flask import Flask, render_template, flash, redirect, session, url_for, request, g, Markup, jsonify, abort
 import requests
 import imageio
 import torch
@@ -9,8 +9,8 @@ from core import Product
 
 app = Flask(__name__)
 
-name = "GHRSST_L4_MUR_Sea_Surface_Temperature"
-product = Product(name, offset = 25.0, scale = 0.001, device="cuda") # 298.15
+name = "AVHRR_OI_L4_GHRSST_NCEI"
+product = Product(name, device="cuda") # 298.15
 
 @app.route("/wmts")
 def wmts():
@@ -21,18 +21,38 @@ def wmts():
 
     with torch.no_grad():
         # s = time.time()
-        tile = product.gettile(tilecol, tilerow, tilematrix, config = {key : args[key] for key in ["device", "min_value", "max_value", "use_cache"] if key in args})
+        config = {key : args[key] for key in ["device", "min_value", "max_value", "use_cache", 'cmap', 'device', 'filter', 'scale'] if key in args}
+        # config["cmap"] = "VIIRS_SNPP_Brightness_Temp_BandI5_Day"
+        # config["method"] = "avg"
+        # config["filter"] = "sobel"
+        tile = product.gettile(tilecol, tilerow, tilematrix, config = config)
         # e = time.time()
 
         # print("Retrieving tilecol {} tilerow {} tilematrix {} took {} seconds".format(tilecol, tilerow, tilematrix, e - s))
 
         if tile is None:
-            flask.abort(404)
+            abort(404)
         
         tile = imageio.imwrite(imageio.RETURN_BYTES, tile, format="png")
 
     return tile, 200, {'Content-Type' : 'image/png'}
-    
+
+@app.route("/getstats")
+def stats():
+    args = request.args
+    bbox = [float(x) for x in args["bbox"].split(",")]
+
+    with torch.no_grad():
+        stats = product.getstats(*bbox)
+
+    return jsonify(stats), 200, {'Content-Type' : 'json'}
+
+@app.route("/clearcache")
+def clearcache():
+    product.cache.clear()
+    product.random = None
+    return "cache cleared", 200
+
 if __name__ == "__main__":
     while True:
         print("enter tilecolumn: ", end="")
@@ -45,7 +65,7 @@ if __name__ == "__main__":
         tilematrix = int(input())
 
         s = time.time()
-        tile = product.gettile(tilecol, tilerow, tilematrix, {"method" : "avg", "device" : "cuda"}) # 
+        tile = product.gettile(tilecol, tilerow, tilematrix, {"method" : "avg", "device" : "cuda"})
         e = time.time()
 
         print("Retrieving tilecol {} tilerow {} tilematrix {} took {} seconds".format(tilecol, tilerow, tilematrix, e - s))
