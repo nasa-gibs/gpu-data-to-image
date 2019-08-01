@@ -5,7 +5,9 @@ different colormaps and formats.
 
 ## Setup
 
-The easiest way to use this software is to download a data file like `20160628-JPL-L4UHfnd-GLOB-v01-fv04-MUR.nc` and drag it to the data folder in this repository. You can run `pip install -r requirements.txt` to automatically install Python dependencies. Note that you must have a computer with an NVIDIA GPU and CUDA must be installed (follow the instructions at https://developer.nvidia.com/cuda-downloads. Then you can run a simple tile generation server with `python server.py`, or launch the WMTS-like flask server with `./run.sh`. You can also use the `parser.py` file to pull date from the public NEXUS/SDAP backend.
+This library requires NVIDIA CUDA, which can be downloaded [here](https://developer.nvidia.com/cuda-downloads). The remaining requirements are Python requirements and can be installed with `pip install -r requirements.txt`. The data folder contains a small (1 tile) pickled data file which can be used to run the default scripts. However, the only imagery which can be generated is the (0, 0, 0) overview and a one-tile MRF file. 
+
+To get more data, download a large data file like `20160628-JPL-L4UHfnd-GLOB-v01-fv04-MUR.nc` and drag it to the data folder in this repository. Then update the product by passing a different name to the `Product` class. By default, the program will look for the appropriate colormap in the colormaps folder (same name) and online using NASA GIBS. Try to name the data file the same thing as the official NASA product designation. You can also use the `parser.py` file to pull date from the public NEXUS/SDAP backend.
 
 ## core.py
 
