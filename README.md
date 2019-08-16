@@ -1,4 +1,4 @@
-# GPU-Data-To-Image Prototype
+# GPU-Data-To-Image Prototype for Tiled Raster Data
 
 This prototype allows you to quickly generate image tiles and MRF files from raw data and on-demand using GPUs, using
 different colormaps and formats.
