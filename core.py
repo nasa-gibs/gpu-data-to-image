@@ -15,6 +15,8 @@ import struct
 import math
 import requests
 
+import scipy.io.netcdf as netcdf
+
 def getcmap(layer, local=False):
     local_path = os.path.join("colormaps", layer + '.xml')
 
@@ -77,10 +79,6 @@ class CMapCache:
 def getdata(name): # temporarily, load pickled data. Can also load from NetCDF (same cost).
     with open(os.path.join("data", name + ".pickle"), "rb") as f:
         return torch.Tensor(pickle.load(f))
-
-# offset = file.variables["analysed_sst"].add_offset
-# scale = file.variables["analysed_sst"].scale_factor
-# missing = file.variables["analysed_sst"]._get_missing_value()
 
 class TileCache:
     def __init__(self, maxsize=1E9, verbose=False):
@@ -151,7 +149,7 @@ class Product:
         print("Loaded Product {} with shape {} and {} overviews".format(self.name, self.shape, self.num_overviews))
 
     def pickle(self):
-        with open(self.name + ".pickle", "wb") as f:
+        with open(os.path.join("data", self.name + ".pickle"), "wb") as f:
             pickle.dump(self.data, f, pickle.HIGHEST_PROTOCOL)
 
     def getshape(self, tilecolumn, tilerow, tilematrix):
@@ -266,15 +264,15 @@ class Product:
     
     def getstats(self, minx, miny, maxx, maxy):
         device = "cuda:0"
-
-        dims = np.array([minx, miny, maxx, maxy])
-
-        dims = dims + np.array([180, -66.5, 180, -66.5])
-        dims = np.round(np.array([self.data.shape[1], self.data.shape[0], self.data.shape[1], self.data.shape[0]]) * dims / np.array([180, 18.5, 180, 18.5]))
-
-        miny, maxy = sorted([dims[1], dims[3]])
-        minx, maxx = dims[0], dims[2]
-
+        
+        minx = max(minx, -180)
+        miny = max(miny, -90)
+        maxx = min(maxx, 180)
+        maxy = min(maxy, 90)
+        
+        dims = np.array([minx, miny, maxx, maxy]) + np.array([180, 90, 180, 90])
+        dims = np.round(np.array([self.data.shape[1], self.data.shape[0], self.data.shape[1], self.data.shape[0]]) * dims / np.array([360, 180, 360, 180]))
+        minx, miny, maxx, maxy = list(dims)
         print(int(miny), int(maxy), int(minx), int(maxx))
         data = self.data[int(miny) : int(maxy), int(minx) : int(maxx)].to(device, copy=True)
         data = data.mul_(self.scale).add_(self.offset)

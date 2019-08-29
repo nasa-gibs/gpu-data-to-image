@@ -9,8 +9,11 @@ from core import Product
 
 app = Flask(__name__)
 
-name = "AVHRR_OI_L4_GHRSST_NCEI"
-product = Product(name, device="cuda") # 298.15
+# name = "AVHRR_OI_L4_GHRSST_NCEI"
+name = "20190914_GHRSST"
+product = Product(name, device="cuda", offset=-273.15) # 298.15
+
+breakpoint()
 
 @app.route("/wmts")
 def wmts():

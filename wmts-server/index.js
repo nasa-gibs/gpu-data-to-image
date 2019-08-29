@@ -10,7 +10,7 @@ import Draw, {createRegularPolygon, createBox} from 'ol/interaction/Draw.js';
 import {Vector as VectorSource} from 'ol/source.js';
 
 
-var projection = getProjection('EPSG:3857');
+var projection = getProjection('EPSG:4326');
 var projectionExtent = projection.getExtent();
 var size = getWidth(projectionExtent) / 512;
 var resolutions = new Array(14);
@@ -18,9 +18,11 @@ var matrixIds = new Array(14);
 for (var z = 0; z < 14; ++z) {
 // generate resolutions and matrixIds arrays for this WMTS
 resolutions[z] = size / Math.pow(2, z);
-matrixIds[z] = z;
+matrixIds[z] =  z;
 
-console.log(resolutions[z], matrixIds[z], size);
+// resolutions[0] = resolutions[0] / 2;
+
+console.log(projectionExtent, resolutions[z], matrixIds[z], size);
 }
 
 var url = new URL('http://localhost:5000/wmts')
@@ -51,8 +53,18 @@ if ($('#scale')[0].checked) {
   url.searchParams.append('max_value', '30.0')
 }
 
+console.log(getTopLeft(projectionExtent));
+
 var map = new Map({
 layers: [
+  // new TileLayer({
+  //   source: new OSM(),
+  //   opacity: 0.7,
+  //   projection: "EPSG:4326",
+  //   style: 'default',
+  //   wrapX: false
+  // }),
+
   new TileLayer({
     opacity: 1.0,
     source: new WMTS({
@@ -65,18 +77,33 @@ layers: [
       tileGrid: new WMTSTileGrid({
 	origin: getTopLeft(projectionExtent),
 	resolutions: resolutions,
-	matrixIds: matrixIds
+  matrixIds: matrixIds,
+  tileSize: 512
       }),
       style: 'default',
       wrapX: false
-    })
+    }),
   })
 ],
 target: 'map',
 view: new View({
-  center: [-11158582, 15013697],
-  zoom: 3
+  center: [0, 0],
+  zoom: 2,
+  // displayProjection: 'EPSG:4326',
+  projection: 'EPSG:4326',
 })
+});
+
+map.on('moveend',function(e){
+  // let extent = e.feature.getGeometry().getExtent();
+  let extent = map.getView().calculateExtent(map.getSize());
+  fetch("http://localhost:5000/getstats?bbox=" + extent.join(",")).then(
+      response => response.json()).then(function(data) {
+        $('#stats').text("Max: " + data.max.toString() + 
+      ", Min: " + data.min.toString() + ", Mean: " + data.mean.toString() + ", Std: " + 
+      data.std.toString()); 
+      $('#bbox').text("[" + extent.join(",") + "]");
+      });
 });
 
 var source = new VectorSource({wrapX: false});
@@ -88,14 +115,16 @@ function addInteraction() {
     draw = new Draw({
         source: source,
         type: value,
-        geometryFunction: geometryFunction
+        geometryFunction: geometryFunction,
+        projection: "EPSG:4326"
         });
 
     draw.on('drawend',function(e){
             // let extent = e.feature.getGeometry().getExtent();
-            let extent = e.feature.getGeometry().transform('EPSG:3857', 'EPSG:4326').flatCoordinates.slice(0, 6)
+            let extent = e.feature.getGeometry();
             console.log(extent);
-            fetch("http://localhost:5000/getstats?bbox=" + extent.slice(0, 3).join(",") + "," + extent[5]).then(response => response.json()).then(data => $('#stats').text("Max: " + data.max.toString() + ", Min: " + data.min.toString() + ", Mean: " + data.mean.toString() + ", Std: " + data.std.toString()));
+            extent = extent.extent_;
+            fetch("http://localhost:5000/getstats?bbox=" + extent.join(",")).then(response => response.json()).then(data => $('#stats').text("Max: " + data.max.toString() + ", Min: " + data.min.toString() + ", Mean: " + data.mean.toString() + ", Std: " + data.std.toString()));
     });
     map.addInteraction(draw);
 }
