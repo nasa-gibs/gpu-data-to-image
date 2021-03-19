@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-	  "test": "echo \"Error: no test specified\" && exit 1",
-	  "start": "parcel index.html",
-	  "build": "parcel build --public-url . index.html"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "parcel index.html",
+    "build": "parcel build --public-url . index.html"
   },
   "author": "",
   "license": "ISC",
@@ -14,6 +14,6 @@
     "ol": "^5.3.3"
   },
   "devDependencies": {
-    "parcel-bundler": "^1.12.3"
+    "parcel-bundler": "^1.12.5"
   }
 }
