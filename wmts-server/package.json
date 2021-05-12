@@ -12,7 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "ol": "^5.3.3",
-    "postcss": "^8.2.9"
+    "postcss": "^8.2.10"
   },
   "devDependencies": {
     "parcel": "^2.0.0-beta.2"
